@@ -4,27 +4,22 @@ from psycopg2.extras import RealDictCursor
 from datetime import datetime
 import os
 import toml
-import streamlit as st   # 👈 IMPORTANTE: ler secrets do Streamlit Cloud
+import streamlit as st
+
 
 # ============================================
-# 📌 Caminho do banco local SQLite
+# 📌 Caminho banco SQLite local
 # ============================================
 DB_PATH = os.path.join(os.path.dirname(__file__), "controle_financeiro.db")
 
 
 # ============================================
-# 📌 Carregar secrets (Supabase)
-# PRIORIDADE:
-#   1️⃣ st.secrets (Streamlit Cloud)
-#   2️⃣ .streamlit/secrets.toml local
+# 📌 Carregar secrets (prioridade: streamlit > local)
 # ============================================
 POSTGRES_CONFIG = None
 
-# 1) Tenta pegar do Streamlit Cloud
 if "postgres" in st.secrets:
     POSTGRES_CONFIG = dict(st.secrets["postgres"])
-
-# 2) Se estiver rodando localmente, tenta ler secrets.toml
 else:
     try:
         secrets_path = os.path.join(os.path.dirname(__file__), ".streamlit", "secrets.toml")
@@ -36,12 +31,9 @@ else:
 
 
 # ============================================
-# 🔌 Conexão com BD (Supabase ou SQLite)
+# 🔌 Conexão
 # ============================================
 def get_connection():
-    """Retorna conexão PostgreSQL (Supabase) ou SQLite (local)."""
-
-    # --- Se Supabase configurado, tenta conectar ---
     if POSTGRES_CONFIG:
         try:
             conn = psycopg2.connect(
@@ -50,17 +42,16 @@ def get_connection():
             )
             return conn
         except Exception as e:
-            print("❌ Erro ao conectar no PostgreSQL:", e)
-            print("➡️ Revertendo para SQLite...")
+            print("❌ Erro PostgreSQL:", e)
+            print("➡️ Usando SQLite...")
 
-    # --- Fallback SQLite ---
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     return conn
 
 
 # ============================================
-# 🏗️ Criação das tabelas
+# 🏗️ Criar tabelas
 # ============================================
 def init_database():
     conn = get_connection()
@@ -74,9 +65,11 @@ def init_database():
             conn.commit()
         except Exception as e:
             if "already exists" not in str(e):
-                print("Erro ao executar DDL:", e)
+                print("Erro DDL:", e)
 
-    # -------- Tabelas --------
+    # ---------------------------
+    # ✔ Tabelas principais
+    # ---------------------------
     ddl(f"""
         CREATE TABLE IF NOT EXISTS usuarios (
             id {'SERIAL' if is_postgres else 'INTEGER PRIMARY KEY AUTOINCREMENT'},
@@ -186,34 +179,50 @@ def init_database():
         )
     """)
 
+    # ---------------------------
+    # ✔ NOVA TABELA — meios de pagamento por usuário
+    # ---------------------------
+    ddl(f"""
+        CREATE TABLE IF NOT EXISTS meios_pagamento_usuario (
+            id {'SERIAL' if is_postgres else 'INTEGER PRIMARY KEY AUTOINCREMENT'},
+            usuario_id INTEGER NOT NULL,
+            tipo TEXT NOT NULL,                 -- cartao_credito | cartao_debito | pix
+            banco TEXT NOT NULL,                -- Nubank | Caixa | Santander...
+            bandeira TEXT,                      -- Visa | Master (somente cartões)
+            ultimos_digitos TEXT,               -- 4 últimos dígitos
+            ativo {'BOOLEAN DEFAULT TRUE' if is_postgres else 'BOOLEAN DEFAULT 1'},
+            data_criacao TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+
     _insert_default_data(cursor, is_postgres)
     conn.close()
 
 
 # ============================================
-# 🌱 Inserção de dados padrão
+# Inserir dados padrão
 # ============================================
 def _insert_default_data(cursor, is_postgres):
 
     def empty(table):
         cursor.execute(f"SELECT COUNT(*) as total FROM {table}")
         row = cursor.fetchone()
-        total = row["total"] if isinstance(row, dict) else row[0]
-        return total == 0
+        return (row["total"] if isinstance(row, dict) else row[0]) == 0
 
-    # Formas de pagamento
+    q_pg = "%s, %s" if is_postgres else "?, ?"
+    q_pg4 = "%s, %s, %s, %s" if is_postgres else "?, ?, ?, ?"
+
+    # formas_pagamento
     if empty("formas_pagamento"):
         cursor.executemany(
-            "INSERT INTO formas_pagamento (descricao, ativo) VALUES (%s, %s)" if is_postgres
-            else "INSERT INTO formas_pagamento (descricao, ativo) VALUES (?, ?)",
+            f"INSERT INTO formas_pagamento (descricao, ativo) VALUES ({q_pg})",
             [('À Vista', True), ('A Prazo', True)]
         )
 
-    # Tipos documento
+    # tipos_documento
     if empty("tipos_documento"):
         cursor.executemany(
-            "INSERT INTO tipos_documento (descricao, requer_bandeira, permite_parcelamento, ativo) VALUES (%s, %s, %s, %s)" if is_postgres
-            else "INSERT INTO tipos_documento (descricao, requer_bandeira, permite_parcelamento, ativo) VALUES (?, ?, ?, ?)",
+            f"INSERT INTO tipos_documento (descricao, requer_bandeira, permite_parcelamento, ativo) VALUES ({q_pg4})",
             [
                 ('Carnê', False, True, True),
                 ('Promissória', False, True, True),
@@ -226,31 +235,28 @@ def _insert_default_data(cursor, is_postgres):
             ]
         )
 
-    # Bandeiras
+    # bandeiras_cartao
     if empty("bandeiras_cartao"):
         cursor.executemany(
-            "INSERT INTO bandeiras_cartao (descricao, ativo) VALUES (%s, %s)" if is_postgres
-            else "INSERT INTO bandeiras_cartao (descricao, ativo) VALUES (?, ?)",
+            f"INSERT INTO bandeiras_cartao (descricao, ativo) VALUES ({q_pg})",
             [('Visa', True), ('Mastercard', True), ('Elo', True),
              ('American Express', True), ('Hipercard', True)]
         )
 
-    # Status
+    # status_documento
     if empty("status_documento"):
         cursor.executemany(
-            "INSERT INTO status_documento (descricao, cor) VALUES (%s, %s)" if is_postgres
-            else "INSERT INTO status_documento (descricao, cor) VALUES (?, ?)",
+            f"INSERT INTO status_documento (descricao, cor) VALUES ({q_pg})",
             [('Aberto', '#FFA500'), ('Pago', '#28A745'),
              ('Vencido', '#DC3545'), ('Cancelado', '#6C757D')]
         )
 
-    # Tipos de crédito
+    # tipos_credito
     if empty("tipos_credito"):
         cursor.executemany(
-            "INSERT INTO tipos_credito (descricao, ativo) VALUES (%s, %s)" if is_postgres
-            else "INSERT INTO tipos_credito (descricao, ativo) VALUES (?, ?)",
-            [('Salário', True), ('Premiação', True), ('13º Salário', True),
-             ('Férias', True), ('Outros', True)]
+            f"INSERT INTO tipos_credito (descricao, ativo) VALUES ({q_pg})",
+            [('Salário', True), ('Premiação', True),
+             ('13º Salário', True), ('Férias', True), ('Outros', True)]
         )
 
     cursor.connection.commit()

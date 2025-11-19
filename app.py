@@ -22,11 +22,13 @@ def format_br_date(d: date) -> str:
         return d.strftime("%d/%m/%Y")
     return ""
 
+
 def parse_br_date(s: str, default: date) -> date:
     try:
         return datetime.strptime(s.strip(), "%d/%m/%Y").date()
     except Exception:
         return default
+
 
 def date_input_br(label: str, value: date, key: str) -> date:
     default_str = format_br_date(value)
@@ -42,7 +44,6 @@ st.set_page_config(
     page_icon="💰",
     layout="wide",
     initial_sidebar_state="expanded",
-    # theme="light"  # <<< Tema claro ativado
 )
 
 # Inicializa banco
@@ -77,6 +78,7 @@ st.markdown(
     .debito { color: #DC3545 !important; font-weight: bold; }
     .saldo-positivo { color: #28A745 !important; font-weight: bold; }
     .saldo-negativo { color: #DC3545 !important; font-weight: bold; }
+    .meio-inativo { color: #999999 !important; font-style: italic; }
 </style>
 """,
     unsafe_allow_html=True,
@@ -255,6 +257,171 @@ def pagina_fornecedores():
 
 
 # -------------------------------------------------
+# 🏧 Meios de Pagamento (cartões / PIX)
+# -------------------------------------------------
+def pagina_meios_pagamento():
+    st.title("🏧 Meios de Pagamento (Cartões / PIX)")
+
+    tab1, tab2 = st.tabs(["Meus Meios de Pagamento", "Cadastrar Novo"])
+
+    # LISTA
+    with tab1:
+        meios = cadastros.listar_meios_pagamento_usuario(
+            st.session_state.user["id"],
+            incluir_inativos=True
+        )
+
+        if not meios:
+            st.info("Nenhum meio de pagamento cadastrado ainda.")
+        else:
+            # agrupa por tipo_pagamento
+            grupos = {
+                "CARTAO_CREDITO": [],
+                "CARTAO_DEBITO": [],
+                "PIX": [],
+                "OUTRO": []
+            }
+            for m in meios:
+                t = (m.get("tipo_pagamento") or "OUTRO").upper()
+                if t not in grupos:
+                    grupos["OUTRO"].append(m)
+                else:
+                    grupos[t].append(m)
+
+            def render_meio(m):
+                ativo = m.get("ativo", True)
+                classe = "" if ativo else "meio-inativo"
+                status_txt = "Ativo" if ativo else "Inativo"
+                linha = f"**{m.get('apelido', '')}**"
+                banco = m.get("banco")
+                bandeira = m.get("bandeira_cartao")
+                ult = m.get("ultimos_digitos")
+                chave_pix = m.get("chave_pix")
+
+                detalhes = []
+                if banco:
+                    detalhes.append(f"Banco: {banco}")
+                if bandeira:
+                    detalhes.append(f"Bandeira: {bandeira}")
+                if ult:
+                    detalhes.append(f"Final: {ult}")
+                if chave_pix:
+                    detalhes.append(f"Chave PIX: {chave_pix}")
+
+                with st.container():
+                    st.markdown(f"<span class='{classe}'>{linha}</span>", unsafe_allow_html=True)
+                    if detalhes:
+                        st.write(" • " + " | ".join(detalhes))
+                    st.write(f"**Status:** {status_txt}")
+                    if ativo:
+                        if st.button("Desativar", key=f"desativar_meio_{m['id']}"):
+                            ok, msg = cadastros.desativar_meio_pagamento(m["id"], st.session_state.user["id"])
+                            if ok:
+                                st.success(msg)
+                                st.rerun()
+                            else:
+                                st.error(msg)
+                    st.divider()
+
+            # Cartões de Crédito
+            if grupos["CARTAO_CREDITO"]:
+                st.subheader("💳 Cartões de Crédito")
+                for m in grupos["CARTAO_CREDITO"]:
+                    render_meio(m)
+
+            # Cartões de Débito
+            if grupos["CARTAO_DEBITO"]:
+                st.subheader("💳 Cartões de Débito")
+                for m in grupos["CARTAO_DEBITO"]:
+                    render_meio(m)
+
+            # PIX
+            if grupos["PIX"]:
+                st.subheader("⚡ PIX")
+                for m in grupos["PIX"]:
+                    render_meio(m)
+
+            # Outros
+            if grupos["OUTRO"]:
+                st.subheader("💼 Outros")
+                for m in grupos["OUTRO"]:
+                    render_meio(m)
+
+    # CADASTRO
+    with tab2:
+        st.subheader("Cadastrar Novo Meio de Pagamento")
+
+        tipo_map = {
+            "Cartão de Crédito": "CARTAO_CREDITO",
+            "Cartão de Débito": "CARTAO_DEBITO",
+            "PIX": "PIX",
+            "Outro": "OUTRO",
+        }
+
+        tipo_label = st.selectbox(
+            "Tipo de Pagamento *",
+            list(tipo_map.keys()),
+            index=0
+        )
+        tipo_pagamento = tipo_map[tipo_label]
+
+        apelido = st.text_input(
+            "Apelido *",
+            help="Ex.: 'Santander – Master – 9999' ou 'Caixa – Principal'"
+        )
+        banco = st.text_input("Banco (opcional)", help="Ex.: Santander, Nubank, Caixa...")
+
+        bandeira_cartao = None
+        ultimos_digitos = None
+        chave_pix = None
+
+        if tipo_pagamento in ("CARTAO_CREDITO", "CARTAO_DEBITO"):
+            bandeira_cartao = st.text_input("Bandeira do Cartão", help="Ex.: Visa, Master, Elo...")
+            ultimos_digitos = st.text_input("Últimos 4 dígitos", max_chars=4)
+        elif tipo_pagamento == "PIX":
+            chave_pix = st.text_input("Chave PIX (opcional)", help="E-mail, CPF, telefone ou aleatória")
+
+        if st.button("Salvar Meio de Pagamento", type="primary"):
+            if not apelido:
+                st.warning("Informe pelo menos o apelido.")
+            else:
+                ok, meio_id, msg = cadastros.criar_meio_pagamento(
+                    usuario_id=st.session_state.user["id"],
+                    tipo_pagamento=tipo_pagamento,
+                    apelido=apelido,
+                    banco=banco if banco else None,
+                    bandeira_cartao=bandeira_cartao if bandeira_cartao else None,
+                    ultimos_digitos=ultimos_digitos if ultimos_digitos else None,
+                    chave_pix=chave_pix if chave_pix else None,
+                )
+                if ok:
+                    st.success(msg)
+                    st.rerun()
+                else:
+                    st.error(msg)
+
+
+# -------------------------------------------------
+# Helper para mapear tipo_documento -> tipo_pagamento
+# -------------------------------------------------
+def inferir_tipo_pagamento_por_documento(descricao_tipo_doc: str):
+    """
+    Mapeia a descrição do tipo de documento para o tipo_pagamento
+    usado em meios_pagamento_usuario.
+    """
+    if not descricao_tipo_doc:
+        return None
+    desc = descricao_tipo_doc.upper()
+    if "CRÉDITO" in desc or "CREDITO" in desc:
+        return "CARTAO_CREDITO"
+    if "DÉBITO" in desc or "DEBITO" in desc:
+        return "CARTAO_DEBITO"
+    if "PIX" in desc:
+        return "PIX"
+    return None
+
+
+# -------------------------------------------------
 # 💳 Lançamento de Débito
 # -------------------------------------------------
 def pagina_lancamento_debito():
@@ -263,7 +430,6 @@ def pagina_lancamento_debito():
     fornecedores = cadastros.listar_fornecedores(st.session_state.user["id"])
     formas_pagamento = cadastros.listar_formas_pagamento()
     tipos_documento = cadastros.listar_tipos_documento()
-    bandeiras = cadastros.listar_bandeiras_cartao()
 
     if not fornecedores:
         st.warning("⚠️ Cadastre ao menos um fornecedor antes de lançar débitos!")
@@ -273,6 +439,10 @@ def pagina_lancamento_debito():
         return
 
     col1, col2 = st.columns(2)
+
+    meio_selecionado = None
+    tipo_pagamento_para_meio = None
+    meios_disponiveis = []
 
     with col1:
         fornecedor = st.selectbox(
@@ -291,13 +461,29 @@ def pagina_lancamento_debito():
             format_func=lambda x: x["descricao"]
         )
 
-        bandeira = None
-        if tipo_documento["requer_bandeira"]:
-            bandeira = st.selectbox(
-                "Bandeira *",
-                options=bandeiras,
-                format_func=lambda x: x["descricao"]
+        # Descobre se esse tipo de documento usa cartão / pix
+        tipo_pagamento_para_meio = inferir_tipo_pagamento_por_documento(
+            tipo_documento["descricao"]
+        )
+
+        if tipo_pagamento_para_meio:
+            meios_disponiveis = cadastros.listar_meios_pagamento_usuario(
+                st.session_state.user["id"],
+                tipo_pagamento=tipo_pagamento_para_meio,
+                incluir_inativos=False,
             )
+
+            if meios_disponiveis:
+                meio_selecionado = st.selectbox(
+                    "Cartão / Conta *",
+                    options=meios_disponiveis,
+                    format_func=lambda x: x["apelido"],
+                )
+            else:
+                st.warning(
+                    "Nenhum cartão/conta cadastrada para esse tipo de documento.\n"
+                    "Cadastre em: **Meios de Pagamento** no menu lateral."
+                )
 
     with col2:
         valor_total = st.number_input("Valor Total *", min_value=0.01, step=0.01, format="%.2f")
@@ -319,6 +505,15 @@ def pagina_lancamento_debito():
 
     if st.button("Lançar Débito", type="primary"):
         if fornecedor and forma_pagamento and tipo_documento and valor_total > 0 and descricao:
+            # monta observação final com o meio selecionado (se houver)
+            observacoes_final = observacoes or ""
+            if meio_selecionado:
+                tag_meio = f"[Meio: {meio_selecionado['apelido']}]"
+                if observacoes_final:
+                    observacoes_final = observacoes_final.strip() + " " + tag_meio
+                else:
+                    observacoes_final = tag_meio
+
             success, lanc_id, message = debitos.criar_lancamento_debito(
                 usuario_id=st.session_state.user["id"],
                 fornecedor_id=fornecedor["id"],
@@ -327,9 +522,9 @@ def pagina_lancamento_debito():
                 valor_total=valor_total,
                 descricao=descricao,
                 quantidade_parcelas=quantidade_parcelas,
-                bandeira_cartao_id=bandeira["id"] if bandeira else None,
+                bandeira_cartao_id=None,  # mantido por compatibilidade; usando meios_pagamento_usuario em observação
                 data_primeira_parcela=data_primeira,
-                observacoes=observacoes,
+                observacoes=observacoes_final,
             )
 
             if success:
@@ -581,8 +776,8 @@ def pagina_relatorios():
                 "Mês",
                 options=list(range(1, 13)),
                 format_func=lambda x: [
-                    "Janeiro","Fevereiro","Março","Abril","Maio","Junho",
-                    "Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"
+                    "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
+                    "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"
                 ][x - 1],
                 index=date.today().month - 1
             )
@@ -713,6 +908,7 @@ def main():
                 [
                     "Dashboard",
                     "Fornecedores",
+                    "Meios de Pagamento",
                     "Lançar Débito",
                     "Lançar Crédito",
                     "Gestão de Parcelas",
@@ -730,6 +926,8 @@ def main():
             pagina_dashboard()
         elif menu_option == "Fornecedores":
             pagina_fornecedores()
+        elif menu_option == "Meios de Pagamento":
+            pagina_meios_pagamento()
         elif menu_option == "Lançar Débito":
             pagina_lancamento_debito()
         elif menu_option == "Lançar Crédito":
