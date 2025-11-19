@@ -27,11 +27,14 @@ def authenticate_user(username, password):
     cursor = conn.cursor()
 
     try:
-        cursor.execute("""
+        cursor.execute(
+            """
             SELECT id, username, password_hash, nome_completo, email
             FROM usuarios
-            WHERE username = %s
-        """, (username,))
+            WHERE username = %(username)s
+            """,
+            {"username": username}
+        )
 
         user = cursor.fetchone()
         conn.close()
@@ -52,17 +55,16 @@ def authenticate_user(username, password):
 
 # --------------------------------------------
 # 🆕 Criar novo usuário (RETORNO PADRONIZADO)
-# Sempre retorna: (success, user_id, message)
 # --------------------------------------------
 def create_user(username, password, nome_completo, email):
     conn = get_connection()
     cursor = conn.cursor()
 
     try:
-        # Verifica se já existe
-        cursor.execute("""
-            SELECT id FROM usuarios WHERE username = %s
-        """, (username,))
+        cursor.execute(
+            "SELECT id FROM usuarios WHERE username = %(username)s",
+            {"username": username}
+        )
 
         existente = cursor.fetchone()
         if existente:
@@ -71,11 +73,19 @@ def create_user(username, password, nome_completo, email):
 
         hashed = hash_password(password)
 
-        cursor.execute("""
+        cursor.execute(
+            """
             INSERT INTO usuarios (username, password_hash, nome_completo, email)
-            VALUES (%s, %s, %s, %s)
+            VALUES (%(username)s, %(password)s, %(nome)s, %(email)s)
             RETURNING id
-        """, (username, hashed, nome_completo, email))
+            """,
+            {
+                "username": username,
+                "password": hashed,
+                "nome": nome_completo,
+                "email": email
+            }
+        )
 
         new_id = cursor.fetchone()["id"]
 
