@@ -1,0 +1,57 @@
+========================================
+  CONTROLE FINANCEIRO - WINDOWS
+========================================
+
+INSTALACAO SUPER FACIL - 2 CLIQUES!
+====================================
+
+1. Clique duas vezes em: instalar_windows.bat
+   (Isso vai instalar tudo automaticamente)
+
+2. Clique duas vezes em: executar.bat
+   (Isso vai abrir o sistema no navegador)
+
+Pronto! O sistema vai abrir em: http://localhost:8501
+
+
+INSTALACAO MANUAL (se preferir)
+================================
+
+1. Abra o CMD nesta pasta
+
+2. Execute os comandos:
+   python -m venv venv
+   venv\Scripts\activate
+   pip install pandas==2.0.3
+   pip install bcrypt==4.0.1
+   pip install streamlit==1.28.0
+
+3. Execute o sistema:
+   streamlit run app.py
+
+
+TEM PROBLEMAS NA INSTALACAO?
+=============================
+
+Abra o arquivo: INSTALACAO_WINDOWS.md
+(Tem solucoes para todos os problemas comuns)
+
+
+REQUISITOS
+==========
+
+- Windows 10 ou 11
+- Python 3.8 ou superior
+- Conexao com internet (para instalar bibliotecas)
+
+
+DUVIDAS?
+========
+
+Consulte os arquivos de documentacao:
+- README.md (documentacao completa)
+- INICIO_RAPIDO.md (guia rapido)
+- INSTALACAO_WINDOWS.md (solucao de problemas)
+
+
+Bom uso! 💰

@@ -1,0 +1,10 @@
+# Requirements para Windows - Versões Estáveis e Compatíveis
+
+# Pandas - Análise de dados
+pandas==2.0.3
+
+# bcrypt - Criptografia de senhas
+bcrypt==4.0.1
+
+# Streamlit - Interface web
+streamlit==1.28.0
