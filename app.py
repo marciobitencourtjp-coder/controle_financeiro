@@ -2,10 +2,10 @@
 import streamlit as st
 import pandas as pd
 from datetime import datetime, timedelta, date
-import sqlite3  # ainda usado se cair no fallback do database
+import sqlite3  # fallback local
 from database import POSTGRES_CONFIG
 
-# Importa os módulos do sistema
+# Importa módulos internos
 import database
 import auth
 import cadastros
@@ -13,10 +13,13 @@ import debitos
 import creditos
 import relatorios
 
-st.sidebar.write("POSTGRES CONFIG:", POSTGRES_CONFIG)
+# -------------------------------------------------
+# 🚫 REMOVIDO — NÃO MOSTRAR CONFIG DO POSTGRES
+# st.sidebar.write("POSTGRES CONFIG:", POSTGRES_CONFIG)
+# -------------------------------------------------
 
 # -------------------------------------------------
-# 🚩 Helpers para datas em padrão brasileiro
+# 🚩 Helpers para datas no padrão brasileiro
 # -------------------------------------------------
 def format_br_date(d: date) -> str:
     if isinstance(d, (date, datetime)):
@@ -30,16 +33,14 @@ def parse_br_date(s: str, default: date) -> date:
         return default
 
 def date_input_br(label: str, value: date, key: str) -> date:
-    """
-    Input de data em formato brasileiro (dd/mm/aaaa),
-    usando text_input + parse para date.
-    """
     default_str = format_br_date(value)
     s = st.text_input(label, value=default_str, key=key)
     return parse_br_date(s, value)
 
 
-# Configuração da página
+# -------------------------------------------------
+# ⚙️ Configuração da página
+# -------------------------------------------------
 st.set_page_config(
     page_title="Controle Financeiro",
     page_icon="💰",
@@ -47,10 +48,10 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Inicializa o banco de dados
+# Inicializa banco
 database.init_database()
 
-# Inicializa o estado da sessão
+# Inicializa sessão
 if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
 if "user" not in st.session_state:
@@ -65,30 +66,20 @@ st.markdown(
         padding: 10px;
         border-radius: 5px;
     }
-    .credito {
-        color: #28A745;
-        font-weight: bold;
-    }
-    .debito {
-        color: #DC3545;
-        font-weight: bold;
-    }
-    .saldo-positivo {
-        color: #28A745;
-        font-weight: bold;
-    }
-    .saldo-negativo {
-        color: #DC3545;
-        font-weight: bold;
-    }
+    .credito { color: #28A745; font-weight: bold; }
+    .debito { color: #DC3545; font-weight: bold; }
+    .saldo-positivo { color: #28A745; font-weight: bold; }
+    .saldo-negativo { color: #DC3545; font-weight: bold; }
 </style>
 """,
     unsafe_allow_html=True,
 )
 
 
+# -------------------------------------------------
+# 👤 LOGIN PAGE
+# -------------------------------------------------
 def login_page():
-    """Página de login"""
     st.title("🔐 Controle Financeiro - Login")
 
     tab1, tab2 = st.tabs(["Login", "Criar Conta"])
@@ -139,21 +130,23 @@ def login_page():
                 st.warning("Preencha todos os campos obrigatórios!")
 
 
+# -------------------------------------------------
+# 🚪 LOGOUT
+# -------------------------------------------------
 def logout():
-    """Função de logout"""
     st.session_state.logged_in = False
     st.session_state.user = None
     st.rerun()
 
 
+# -------------------------------------------------
+# 📊 DASHBOARD PRINCIPAL
+# -------------------------------------------------
 def pagina_dashboard():
-    """Dashboard principal"""
     st.title("📊 Dashboard Financeiro")
 
-    # Atualiza status de parcelas vencidas
     debitos.atualizar_status_parcela_vencida()
 
-    # Filtros de período (datas em dd/mm/aaaa)
     col1, col2 = st.columns(2)
     with col1:
         data_inicio = date_input_br(
@@ -164,61 +157,39 @@ def pagina_dashboard():
             "Data Fim", value=date.today(), key="dash_data_fim"
         )
 
-    # Resumo financeiro
     resumo = relatorios.get_resumo_financeiro(
         st.session_state.user["id"], data_inicio, data_fim
     )
 
-    # Métricas (3 cards: créditos, débitos, saldo)
     col1, col2, col3 = st.columns(3)
-
     with col1:
         st.metric("💚 Total Créditos", f"R$ {resumo['total_creditos']:,.2f}")
-
     with col2:
         st.metric("❤️ Total Débitos", f"R$ {resumo['total_debitos']:,.2f}")
-
     with col3:
-        saldo_emoji = "💰" if resumo["saldo"] >= 0 else "⚠️"
-        st.metric(f"{saldo_emoji} Saldo", f"R$ {resumo['saldo']:,.2f}")
+        emoji = "💰" if resumo["saldo"] >= 0 else "⚠️"
+        st.metric(f"{emoji} Saldo", f"R$ {resumo['saldo']:,.2f}")
 
     st.divider()
 
-    # Parcelas próximas do vencimento (próximos 30 dias)
     st.subheader("📅 Parcelas Próximas do Vencimento")
 
     hoje = date.today()
-    proximos_30_dias = hoje + timedelta(days=30)
+    proximos_30 = hoje + timedelta(days=30)
 
-    parcelas_proximas = debitos.listar_parcelas_debito(
-        st.session_state.user["id"], data_inicio=hoje, data_fim=proximos_30_dias
+    parcelas = debitos.listar_parcelas_debito(
+        st.session_state.user["id"], data_inicio=hoje, data_fim=proximos_30
     )
 
-    if parcelas_proximas:
-        df_proximas = pd.DataFrame(parcelas_proximas)
-        # Apenas abertas e vencidas
-        df_proximas = df_proximas[df_proximas["status_id"].isin([1, 3])]
-
-        if not df_proximas.empty:
-            df_display = df_proximas[
-                [
-                    "data_vencimento",
-                    "fornecedor_nome",
-                    "lancamento_descricao",
-                    "valor_parcela",
-                    "status_descricao",
-                ]
+    if parcelas:
+        df = pd.DataFrame(parcelas)
+        df = df[df["status_id"].isin([1, 3])]
+        if not df.empty:
+            df_display = df[
+                ["data_vencimento", "fornecedor_nome", "lancamento_descricao", "valor_parcela", "status_descricao"]
             ].copy()
-            df_display.columns = [
-                "Vencimento",
-                "Fornecedor",
-                "Descrição",
-                "Valor",
-                "Status",
-            ]
-            df_display["Valor"] = df_display["Valor"].apply(
-                lambda x: f"R$ {x:,.2f}"
-            )
+            df_display.columns = ["Vencimento", "Fornecedor", "Descrição", "Valor", "Status"]
+            df_display["Valor"] = df_display["Valor"].apply(lambda x: f"R$ {x:,.2f}")
 
             st.dataframe(df_display, use_container_width=True, hide_index=True)
         else:
@@ -227,30 +198,25 @@ def pagina_dashboard():
         st.info("Nenhuma parcela em aberto nos próximos 30 dias.")
 
 
+# -------------------------------------------------
+# 🏢 Fornecedores
+# -------------------------------------------------
 def pagina_fornecedores():
-    """Página de gestão de fornecedores"""
     st.title("🏢 Gestão de Fornecedores")
 
     tab1, tab2 = st.tabs(["Lista de Fornecedores", "Cadastrar Novo"])
 
     with tab1:
         fornecedores = cadastros.listar_fornecedores(st.session_state.user["id"])
-
         if fornecedores:
             for forn in fornecedores:
                 with st.expander(f"📋 {forn['nome']}"):
                     col1, col2 = st.columns(2)
                     with col1:
-                        st.write(
-                            f"**CPF/CNPJ:** {forn['cpf_cnpj'] or 'Não informado'}"
-                        )
-                        st.write(
-                            f"**Telefone:** {forn['telefone'] or 'Não informado'}"
-                        )
+                        st.write(f"**CPF/CNPJ:** {forn['cpf_cnpj'] or 'Não informado'}")
+                        st.write(f"**Telefone:** {forn['telefone'] or 'Não informado'}")
                     with col2:
-                        st.write(
-                            f"**Email:** {forn['email'] or 'Não informado'}"
-                        )
+                        st.write(f"**Email:** {forn['email'] or 'Não informado'}")
                         st.write(f"**Cadastrado em:** {forn['data_criacao']}")
         else:
             st.info("Nenhum fornecedor cadastrado ainda.")
@@ -281,20 +247,19 @@ def pagina_fornecedores():
                 st.warning("O nome do fornecedor é obrigatório!")
 
 
+# -------------------------------------------------
+# 💳 Lançamento de Débito
+# -------------------------------------------------
 def pagina_lancamento_debito():
-    """Página de lançamento de débitos"""
     st.title("💳 Lançamento de Débito")
 
-    # Carrega dados necessários
     fornecedores = cadastros.listar_fornecedores(st.session_state.user["id"])
     formas_pagamento = cadastros.listar_formas_pagamento()
     tipos_documento = cadastros.listar_tipos_documento()
     bandeiras = cadastros.listar_bandeiras_cartao()
 
     if not fornecedores:
-        st.warning(
-            "⚠️ Você precisa cadastrar pelo menos um fornecedor antes de lançar débitos!"
-        )
+        st.warning("⚠️ Cadastre ao menos um fornecedor antes de lançar débitos!")
         if st.button("Ir para Cadastro de Fornecedores"):
             st.session_state.menu_option = "Fornecedores"
             st.rerun()
@@ -303,87 +268,66 @@ def pagina_lancamento_debito():
     col1, col2 = st.columns(2)
 
     with col1:
-        fornecedor_selecionado = st.selectbox(
+        fornecedor = st.selectbox(
             "Fornecedor *",
             options=fornecedores,
             format_func=lambda x: x["nome"],
         )
-
         forma_pagamento = st.selectbox(
             "Forma de Pagamento *",
             options=formas_pagamento,
-            format_func=lambda x: x["descricao"],
+            format_func=lambda x: x["descricao"]
         )
-
         tipo_documento = st.selectbox(
             "Tipo de Documento *",
             options=tipos_documento,
-            format_func=lambda x: x["descricao"],
+            format_func=lambda x: x["descricao"]
         )
 
-        # Mostra campo de bandeira se necessário
-        bandeira_selecionada = None
+        bandeira = None
         if tipo_documento["requer_bandeira"]:
-            bandeira_selecionada = st.selectbox(
-                "Bandeira do Cartão *",
+            bandeira = st.selectbox(
+                "Bandeira *",
                 options=bandeiras,
-                format_func=lambda x: x["descricao"],
+                format_func=lambda x: x["descricao"]
             )
 
     with col2:
-        valor_total = st.number_input(
-            "Valor Total *", min_value=0.01, step=0.01, format="%.2f"
-        )
-
+        valor_total = st.number_input("Valor Total *", min_value=0.01, step=0.01, format="%.2f")
         descricao = st.text_input("Descrição *")
-
         quantidade_parcelas = 1
+
         if tipo_documento["permite_parcelamento"]:
             quantidade_parcelas = st.number_input(
-                "Quantidade de Parcelas *",
-                min_value=1,
-                max_value=360,
-                value=1,
+                "Quantidade de Parcelas *", min_value=1, max_value=360, value=1
             )
 
-        data_primeira_parcela = date_input_br(
+        data_primeira = date_input_br(
             "Vencimento da 1ª Parcela",
             value=date.today() + timedelta(days=30),
-            key="deb_data_primeira_parcela",
+            key="deb_data_primeira"
         )
 
     observacoes = st.text_area("Observações")
 
     if st.button("Lançar Débito", type="primary"):
-        if (
-            fornecedor_selecionado
-            and forma_pagamento
-            and tipo_documento
-            and valor_total > 0
-            and descricao
-        ):
-            success, lancamento_id, message = debitos.criar_lancamento_debito(
+        if fornecedor and forma_pagamento and tipo_documento and valor_total > 0 and descricao:
+            success, lanc_id, message = debitos.criar_lancamento_debito(
                 usuario_id=st.session_state.user["id"],
-                fornecedor_id=fornecedor_selecionado["id"],
+                fornecedor_id=fornecedor["id"],
                 forma_pagamento_id=forma_pagamento["id"],
                 tipo_documento_id=tipo_documento["id"],
                 valor_total=valor_total,
                 descricao=descricao,
                 quantidade_parcelas=quantidade_parcelas,
-                bandeira_cartao_id=(
-                    bandeira_selecionada["id"]
-                    if bandeira_selecionada
-                    else None
-                ),
-                data_primeira_parcela=data_primeira_parcela,
+                bandeira_cartao_id=bandeira["id"] if bandeira else None,
+                data_primeira_parcela=data_primeira,
                 observacoes=observacoes,
             )
 
             if success:
                 st.success(message)
-                st.info(
-                    f"**Valor de cada parcela:** R$ {valor_total/quantidade_parcelas:.2f}"
-                )
+                st.info(f"Valor por parcela: R$ {valor_total/quantidade_parcelas:.2f}")
                 st.rerun()
             else:
                 st.error(message)
@@ -391,8 +335,10 @@ def pagina_lancamento_debito():
             st.warning("Preencha todos os campos obrigatórios!")
 
 
+# -------------------------------------------------
+# 💰 Lançamento de Crédito
+# -------------------------------------------------
 def pagina_lancamento_credito():
-    """Página de lançamento de créditos"""
     st.title("💰 Lançamento de Crédito")
 
     tipos_credito = cadastros.listar_tipos_credito()
@@ -403,32 +349,28 @@ def pagina_lancamento_credito():
         tipo_credito = st.selectbox(
             "Tipo de Crédito *",
             options=tipos_credito,
-            format_func=lambda x: x["descricao"],
+            format_func=lambda x: x["descricao"]
         )
-
-        valor = st.number_input(
-            "Valor *", min_value=0.01, step=0.01, format="%.2f"
-        )
+        valor = st.number_input("Valor *", min_value=0.01, step=0.01, format="%.2f")
 
     with col2:
         descricao = st.text_input("Descrição *")
-
-        data_recebimento = date_input_br(
+        data_receb = date_input_br(
             "Data de Recebimento",
             value=date.today(),
-            key="cred_data_recebimento",
+            key="cred_data_receb"
         )
 
     observacoes = st.text_area("Observações")
 
     if st.button("Lançar Crédito", type="primary"):
         if tipo_credito and valor > 0 and descricao:
-            success, credito_id, message = creditos.criar_lancamento_credito(
+            success, cred_id, message = creditos.criar_lancamento_credito(
                 usuario_id=st.session_state.user["id"],
                 tipo_credito_id=tipo_credito["id"],
                 valor=valor,
                 descricao=descricao,
-                data_recebimento=data_recebimento,
+                data_recebimento=data_receb,
                 observacoes=observacoes,
             )
 
@@ -441,28 +383,28 @@ def pagina_lancamento_credito():
             st.warning("Preencha todos os campos obrigatórios!")
 
 
+# -------------------------------------------------
+# 📝 Gestão de Parcelas
+# -------------------------------------------------
 def pagina_gestao_parcelas():
-    """Página de gestão de parcelas"""
     st.title("📝 Gestão de Parcelas")
 
-    # Atualiza status de parcelas vencidas
     debitos.atualizar_status_parcela_vencida()
 
-    # Filtros
     col1, col2, col3 = st.columns(3)
 
     fornecedores = cadastros.listar_fornecedores(st.session_state.user["id"])
     status_list = cadastros.listar_status_documento()
 
     with col1:
-        fornecedor_filtro = st.selectbox(
+        fornecedor = st.selectbox(
             "Filtrar por Fornecedor",
             options=[None] + fornecedores,
             format_func=lambda x: "Todos" if x is None else x["nome"],
         )
 
     with col2:
-        status_filtro = st.selectbox(
+        status = st.selectbox(
             "Filtrar por Status",
             options=[None] + status_list,
             format_func=lambda x: "Todos" if x is None else x["descricao"],
@@ -471,16 +413,9 @@ def pagina_gestao_parcelas():
     with col3:
         periodo = st.selectbox(
             "Período",
-            options=[
-                "Todos",
-                "Este Mês",
-                "Próximos 30 dias",
-                "Vencidas",
-                "Personalizado",
-            ],
+            ["Todos", "Este Mês", "Próximos 30 dias", "Vencidas", "Personalizado"],
         )
 
-    # Define datas baseado no período
     data_inicio = None
     data_fim = None
 
@@ -488,34 +423,32 @@ def pagina_gestao_parcelas():
         hoje = date.today()
         data_inicio = hoje.replace(day=1)
         from calendar import monthrange
+        data_fim = hoje.replace(day=monthrange(hoje.year, hoje.month)[1])
 
-        ultimo_dia = monthrange(hoje.year, hoje.month)[1]
-        data_fim = hoje.replace(day=ultimo_dia)
     elif periodo == "Próximos 30 dias":
         data_inicio = date.today()
         data_fim = date.today() + timedelta(days=30)
+
     elif periodo == "Vencidas":
         data_fim = date.today() - timedelta(days=1)
+
     elif periodo == "Personalizado":
-        col_data1, col_data2 = st.columns(2)
-        with col_data1:
+        col_a, col_b = st.columns(2)
+        with col_a:
             data_inicio = date_input_br(
-                "Data Início",
-                value=date.today().replace(day=1),
-                key="gest_parc_data_inicio",
+                "Data Início", value=date.today().replace(day=1),
+                key="gest_parc_inicio"
             )
-        with col_data2:
+        with col_b:
             data_fim = date_input_br(
-                "Data Fim",
-                value=date.today(),
-                key="gest_parc_data_fim",
+                "Data Fim", value=date.today(),
+                key="gest_parc_fim"
             )
 
-    # Busca parcelas
     parcelas = debitos.listar_parcelas_debito(
         usuario_id=st.session_state.user["id"],
-        fornecedor_id=fornecedor_filtro["id"] if fornecedor_filtro else None,
-        status_id=status_filtro["id"] if status_filtro else None,
+        fornecedor_id=fornecedor["id"] if fornecedor else None,
+        status_id=status["id"] if status else None,
         data_inicio=data_inicio,
         data_fim=data_fim,
     )
@@ -523,35 +456,32 @@ def pagina_gestao_parcelas():
     if parcelas:
         st.write(f"**Total de parcelas encontradas:** {len(parcelas)}")
 
-        for parcela in parcelas:
+        for p in parcelas:
             col1, col2, col3, col4 = st.columns([3, 2, 2, 1])
 
             with col1:
-                st.write(f"**{parcela['fornecedor_nome']}**")
+                st.write(f"**{p['fornecedor_nome']}**")
                 st.write(
-                    f"{parcela['lancamento_descricao']} - Parcela {parcela['numero_parcela']}/{parcela['quantidade_parcelas']}"
+                    f"{p['lancamento_descricao']} - Parcela {p['numero_parcela']}/{p['quantidade_parcelas']}"
                 )
 
             with col2:
-                st.write(f"**Vencimento:** {parcela['data_vencimento']}")
-                st.write(
-                    f"**Valor:** R$ {parcela['valor_parcela']:,.2f}"
-                )
+                st.write(f"**Vencimento:** {p['data_vencimento']}")
+                st.write(f"**Valor:** R$ {p['valor_parcela']:,.2f}")
 
             with col3:
-                cor = parcela["status_cor"]
                 st.markdown(
-                    f"<span style='color: {cor}'>●</span> {parcela['status_descricao']}",
+                    f"<span style='color: {p['status_cor']}'>●</span> {p['status_descricao']}",
                     unsafe_allow_html=True,
                 )
-                st.write(f"**Tipo:** {parcela['tipo_documento']}")
+                st.write(f"**Tipo:** {p['tipo_documento']}")
 
             with col4:
-                if parcela["status_id"] in [1, 3]:  # Aberto ou Vencido
-                    if st.button("✅ Baixar", key=f"baixar_{parcela['id']}"):
+                if p["status_id"] in (1, 3):
+                    if st.button("✅ Baixar", key=f"baixar_{p['id']}"):
                         success, message = debitos.baixar_parcela(
-                            parcela["id"],
-                            st.session_state.user["id"],
+                            p["id"],
+                            st.session_state.user["id"]
                         )
                         if success:
                             st.success(message)
@@ -560,42 +490,41 @@ def pagina_gestao_parcelas():
                             st.error(message)
 
             st.divider()
+
     else:
         st.info("Nenhuma parcela encontrada com os filtros selecionados.")
 
 
+# -------------------------------------------------
+# 📈 RELATÓRIOS
+# -------------------------------------------------
 def pagina_relatorios():
-    """Página de relatórios"""
     st.title("📈 Relatórios Financeiros")
 
     tab1, tab2, tab3 = st.tabs(["Conta Corrente", "Mensal", "Por Fornecedor"])
 
-    # -------------------------------------------------
-    # TAB 1 – Conta Corrente
-    # -------------------------------------------------
+    # TAB 1 – Extrato Conta Corrente
     with tab1:
         st.subheader("Extrato Tipo Conta Corrente")
 
         col1, col2 = st.columns(2)
         with col1:
             data_inicio = date_input_br(
-                "Data Início",
-                value=date.today().replace(day=1),
-                key="rel1_inicio",
+                "Data Início", value=date.today().replace(day=1),
+                key="rel1_inicio"
             )
         with col2:
             data_fim = date_input_br(
-                "Data Fim", value=date.today(), key="rel1_fim"
+                "Data Fim", value=date.today(),
+                key="rel1_fim"
             )
 
-        fornecedores = cadastros.listar_fornecedores(
-            st.session_state.user["id"]
-        )
-        fornecedor_filtro = st.selectbox(
+        fornecedores = cadastros.listar_fornecedores(st.session_state.user["id"])
+        fornecedor = st.selectbox(
             "Filtrar por Fornecedor (opcional)",
             options=[None] + fornecedores,
             format_func=lambda x: "Todos" if x is None else x["nome"],
-            key="rel1_forn",
+            key="rel1_forn"
         )
 
         if st.button("Gerar Relatório", key="btn_rel1"):
@@ -603,33 +532,19 @@ def pagina_relatorios():
                 st.session_state.user["id"],
                 data_inicio,
                 data_fim,
-                fornecedor_filtro["id"] if fornecedor_filtro else None,
+                fornecedor["id"] if fornecedor else None,
             )
 
             if not df.empty:
                 df_display = df.copy()
-                df_display["credito"] = df_display["credito"].apply(
-                    lambda x: f"R$ {x:,.2f}" if x > 0 else ""
-                )
-                df_display["debito"] = df_display["debito"].apply(
-                    lambda x: f"R$ {x:,.2f}" if x > 0 else ""
-                )
-                df_display["saldo"] = df_display["saldo"].apply(
-                    lambda x: f"R$ {x:,.2f}"
-                )
+                df_display["credito"] = df_display["credito"].apply(lambda x: f"R$ {x:,.2f}" if x > 0 else "")
+                df_display["debito"] = df_display["debito"].apply(lambda x: f"R$ {x:,.2f}" if x > 0 else "")
+                df_display["saldo"] = df_display["saldo"].apply(lambda x: f"R$ {x:,.2f}")
 
                 df_display = df_display[
                     ["data", "tipo", "descricao", "fornecedor", "credito", "debito", "saldo"]
                 ]
-                df_display.columns = [
-                    "Data",
-                    "Tipo",
-                    "Descrição",
-                    "Fornecedor",
-                    "Crédito",
-                    "Débito",
-                    "Saldo",
-                ]
+                df_display.columns = ["Data", "Tipo", "Descrição", "Fornecedor", "Crédito", "Débito", "Saldo"]
 
                 st.dataframe(df_display, use_container_width=True, hide_index=True)
 
@@ -639,51 +554,30 @@ def pagina_relatorios():
 
                 col1, col2, col3 = st.columns(3)
                 with col1:
-                    st.metric(
-                        "💚 Total Créditos", f"R$ {total_credito:,.2f}"
-                    )
+                    st.metric("💚 Total Créditos", f"R$ {total_credito:,.2f}")
                 with col2:
-                    st.metric(
-                        "❤️ Total Débitos", f"R$ {total_debito:,.2f}"
-                    )
+                    st.metric("❤️ Total Débitos", f"R$ {total_debito:,.2f}")
                 with col3:
                     st.metric("💰 Saldo Final", f"R$ {saldo_final:,.2f}")
             else:
                 st.info("Nenhuma movimentação encontrada no período.")
 
-    # -------------------------------------------------
-    # TAB 2 – Relatório Mensal de Débitos
-    # -------------------------------------------------
+    # TAB 2 – Relatório Mensal
     with tab2:
         st.subheader("Relatório Mensal de Débitos")
 
         col1, col2 = st.columns(2)
         with col1:
-            ano = st.number_input(
-                "Ano",
-                min_value=2000,
-                max_value=2100,
-                value=date.today().year,
-            )
+            ano = st.number_input("Ano", min_value=2000, max_value=2100, value=date.today().year)
         with col2:
             mes = st.selectbox(
                 "Mês",
                 options=list(range(1, 13)),
                 format_func=lambda x: [
-                    "Janeiro",
-                    "Fevereiro",
-                    "Março",
-                    "Abril",
-                    "Maio",
-                    "Junho",
-                    "Julho",
-                    "Agosto",
-                    "Setembro",
-                    "Outubro",
-                    "Novembro",
-                    "Dezembro",
+                    "Janeiro","Fevereiro","Março","Abril","Maio","Junho",
+                    "Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"
                 ][x - 1],
-                index=date.today().month - 1,
+                index=date.today().month - 1
             )
 
         if st.button("Gerar Relatório", key="btn_rel2"):
@@ -693,34 +587,24 @@ def pagina_relatorios():
 
             if not df.empty:
                 df_display = df.copy()
-                df_display["valor_parcela"] = df_display["valor_parcela"].apply(
-                    lambda x: f"R$ {x:,.2f}"
-                )
+                df_display["valor_parcela"] = df_display["valor_parcela"].apply(lambda x: f"R$ {x:,.2f}")
                 df_display["valor_pago"] = df_display["valor_pago"].apply(
                     lambda x: f"R$ {x:,.2f}" if pd.notna(x) else ""
                 )
 
                 st.dataframe(df_display, use_container_width=True, hide_index=True)
-
-                st.metric(
-                    "💰 Total do Mês",
-                    f"R$ {df['valor_parcela'].sum():,.2f}",
-                )
+                st.metric("💰 Total do Mês", f"R$ {df['valor_parcela'].sum():,.2f}")
             else:
                 st.info("Nenhum débito encontrado neste mês.")
 
-    # -------------------------------------------------
     # TAB 3 – Relatório por Fornecedor
-    # -------------------------------------------------
     with tab3:
         st.subheader("Relatório por Fornecedor")
 
-        fornecedores = cadastros.listar_fornecedores(
-            st.session_state.user["id"]
-        )
+        fornecedores = cadastros.listar_fornecedores(st.session_state.user["id"])
 
         if fornecedores:
-            fornecedor_selecionado = st.selectbox(
+            fornecedor = st.selectbox(
                 "Selecione o Fornecedor",
                 options=fornecedores,
                 format_func=lambda x: x["nome"],
@@ -739,94 +623,62 @@ def pagina_relatorios():
                     data_inicio_forn = date_input_br(
                         "Data Início",
                         value=date.today().replace(day=1),
-                        key="rel3_inicio",
+                        key="rel3_inicio"
                     )
                 with col2:
                     data_fim_forn = date_input_br(
                         "Data Fim",
                         value=date.today(),
-                        key="rel3_fim",
+                        key="rel3_fim"
                     )
 
             if st.button("Gerar Relatório", key="btn_rel3"):
                 relatorio = relatorios.gerar_relatorio_por_fornecedor(
                     st.session_state.user["id"],
-                    fornecedor_selecionado["id"],
+                    fornecedor["id"],
                     data_inicio_forn,
                     data_fim_forn,
                 )
 
                 if relatorio:
-                    # Informações do fornecedor
                     st.write("### Informações do Fornecedor")
+
                     col1, col2 = st.columns(2)
                     with col1:
                         st.write(f"**Nome:** {relatorio['fornecedor']['nome']}")
-                        st.write(
-                            f"**CPF/CNPJ:** {relatorio['fornecedor']['cpf_cnpj'] or 'Não informado'}"
-                        )
+                        st.write(f"**CPF/CNPJ:** {relatorio['fornecedor']['cpf_cnpj'] or 'Não informado'}")
                     with col2:
-                        st.write(
-                            f"**Telefone:** {relatorio['fornecedor']['telefone'] or 'Não informado'}"
-                        )
-                        st.write(
-                            f"**Email:** {relatorio['fornecedor']['email'] or 'Não informado'}"
-                        )
+                        st.write(f"**Telefone:** {relatorio['fornecedor']['telefone'] or 'Não informado'}")
+                        st.write(f"**Email:** {relatorio['fornecedor']['email'] or 'Não informado'}")
 
                     st.divider()
 
-                    # Estatísticas
                     st.write("### Estatísticas")
                     col1, col2, col3, col4 = st.columns(4)
 
                     with col1:
-                        st.metric(
-                            "Total de Parcelas",
-                            relatorio["estatisticas"]["total_parcelas"],
-                        )
+                        st.metric("Total de Parcelas", relatorio["estatisticas"]["total_parcelas"])
                     with col2:
-                        st.metric(
-                            "Parcelas Pagas",
-                            relatorio["estatisticas"]["parcelas_pagas"],
-                        )
+                        st.metric("Parcelas Pagas", relatorio["estatisticas"]["parcelas_pagas"])
                     with col3:
-                        st.metric(
-                            "Parcelas em Aberto",
-                            relatorio["estatisticas"]["parcelas_abertas"],
-                        )
+                        st.metric("Parcelas em Aberto", relatorio["estatisticas"]["parcelas_abertas"])
                     with col4:
-                        st.metric(
-                            "Parcelas Vencidas",
-                            relatorio["estatisticas"]["parcelas_vencidas"],
-                        )
+                        st.metric("Parcelas Vencidas", relatorio["estatisticas"]["parcelas_vencidas"])
 
                     col1, col2 = st.columns(2)
                     with col1:
-                        st.metric(
-                            "💚 Valor Pago",
-                            f"R$ {relatorio['estatisticas']['valor_pago']:,.2f}",
-                        )
+                        st.metric("💚 Valor Pago", f"R$ {relatorio['estatisticas']['valor_pago']:,.2f}")
                     with col2:
-                        st.metric(
-                            "⚠️ Valor em Aberto",
-                            f"R$ {relatorio['estatisticas']['valor_em_aberto']:,.2f}",
-                        )
+                        st.metric("⚠️ Valor em Aberto", f"R$ {relatorio['estatisticas']['valor_em_aberto']:,.2f}")
 
                     st.divider()
 
-                    # Parcelas
                     if not relatorio["parcelas"].empty:
                         st.write("### Parcelas")
                         df_display = relatorio["parcelas"].copy()
-                        df_display["valor_parcela"] = df_display[
-                            "valor_parcela"
-                        ].apply(lambda x: f"R$ {x:,.2f}")
-                        df_display["valor_pago"] = df_display[
-                            "valor_pago"
-                        ].apply(
-                            lambda x: f"R$ {x:,.2f}"
-                            if pd.notna(x)
-                            else ""
+                        df_display["valor_parcela"] = df_display["valor_parcela"].apply(lambda x: f"R$ {x:,.2f}")
+                        df_display["valor_pago"] = df_display["valor_pago"].apply(
+                            lambda x: f"R$ {x:,.2f}" if pd.notna(x) else ""
                         )
 
                         st.dataframe(df_display, use_container_width=True, hide_index=True)
@@ -836,18 +688,17 @@ def pagina_relatorios():
             st.info("Nenhum fornecedor cadastrado ainda.")
 
 
+# -------------------------------------------------
+# 🚀 MAIN
+# -------------------------------------------------
 def main():
-    """Função principal"""
-
     if not st.session_state.logged_in:
         login_page()
     else:
-        # Sidebar
+        # SIDEBAR
         with st.sidebar:
             st.title("💰 Controle Financeiro")
-            st.write(
-                f"**Usuário:** {st.session_state.user['nome_completo']}"
-            )
+            st.write(f"**Usuário:** {st.session_state.user['nome_completo']}")
             st.divider()
 
             menu_option = st.radio(
@@ -862,13 +713,12 @@ def main():
                 ],
                 key="menu_option",
             )
-
             st.divider()
 
             if st.button("🚪 Sair", use_container_width=True):
                 logout()
 
-        # Conteúdo principal
+        # MAIN CONTENT
         if menu_option == "Dashboard":
             pagina_dashboard()
         elif menu_option == "Fornecedores":
