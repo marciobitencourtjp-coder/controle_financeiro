@@ -3,6 +3,7 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime, timedelta, date
 import sqlite3  # ainda usado se cair no fallback do database
+from database import POSTGRES_CONFIG
 
 # Importa os módulos do sistema
 import database
@@ -11,6 +12,8 @@ import cadastros
 import debitos
 import creditos
 import relatorios
+
+st.sidebar.write("POSTGRES CONFIG:", POSTGRES_CONFIG)
 
 # -------------------------------------------------
 # 🚩 Helpers para datas em padrão brasileiro
