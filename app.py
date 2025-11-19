@@ -2,7 +2,7 @@
 import streamlit as st
 import pandas as pd
 from datetime import datetime, timedelta, date
-import sqlite3  # fallback local
+import sqlite3
 from database import POSTGRES_CONFIG
 
 # Importa módulos internos
@@ -13,15 +13,13 @@ import debitos
 import creditos
 import relatorios
 
-
 # -------------------------------------------------
-# 🚩 Helpers para datas no padrão brasileiro
+# Helpers para datas
 # -------------------------------------------------
 def format_br_date(d: date) -> str:
     if isinstance(d, (date, datetime)):
         return d.strftime("%d/%m/%Y")
     return ""
-
 
 def parse_br_date(s: str, default: date) -> date:
     try:
@@ -29,15 +27,13 @@ def parse_br_date(s: str, default: date) -> date:
     except Exception:
         return default
 
-
 def date_input_br(label: str, value: date, key: str) -> date:
-    default_str = format_br_date(value)
-    s = st.text_input(label, value=default_str, key=key)
+    s = st.text_input(label, value=format_br_date(value), key=key)
     return parse_br_date(s, value)
 
 
 # -------------------------------------------------
-# ⚙️ Configuração da página (tema claro)
+# Configuração da página
 # -------------------------------------------------
 st.set_page_config(
     page_title="Controle Financeiro",
@@ -57,10 +53,9 @@ if "user" not in st.session_state:
 
 
 # -------------------------------------------------
-# 🎨 CSS customizado (tema claro)
+# CSS
 # -------------------------------------------------
-st.markdown(
-    """
+st.markdown("""
 <style>
     body {
         background-color: #ffffff !important;
@@ -69,24 +64,13 @@ st.markdown(
     .stApp {
         background-color: #ffffff !important;
     }
-    .stMetric {
-        background-color: #f0f2f6 !important;
-        padding: 10px;
-        border-radius: 5px;
-    }
-    .credito { color: #28A745 !important; font-weight: bold; }
-    .debito { color: #DC3545 !important; font-weight: bold; }
-    .saldo-positivo { color: #28A745 !important; font-weight: bold; }
-    .saldo-negativo { color: #DC3545 !important; font-weight: bold; }
     .meio-inativo { color: #999999 !important; font-style: italic; }
 </style>
-""",
-    unsafe_allow_html=True,
-)
+""", unsafe_allow_html=True)
 
 
 # -------------------------------------------------
-# 👤 LOGIN PAGE
+# Página de Login
 # -------------------------------------------------
 def login_page():
     st.title("🔐 Controle Financeiro - Login")
@@ -104,7 +88,6 @@ def login_page():
                 if success:
                     st.session_state.logged_in = True
                     st.session_state.user = user_data
-                    st.success(f"Bem-vindo(a), {user_data['nome_completo']}!")
                     st.rerun()
                 else:
                     st.error("Usuário ou senha incorretos!")
@@ -130,7 +113,7 @@ def login_page():
                     )
                     if success:
                         st.success(message)
-                        st.info("Agora você pode fazer login!")
+                        st.info("Agora você já pode fazer login.")
                     else:
                         st.error(message)
                 else:
@@ -140,7 +123,7 @@ def login_page():
 
 
 # -------------------------------------------------
-# 🚪 LOGOUT
+# Logout
 # -------------------------------------------------
 def logout():
     st.session_state.logged_in = False
@@ -149,7 +132,7 @@ def logout():
 
 
 # -------------------------------------------------
-# 📊 DASHBOARD PRINCIPAL
+# Dashboard
 # -------------------------------------------------
 def pagina_dashboard():
     st.title("📊 Dashboard Financeiro")
@@ -158,13 +141,9 @@ def pagina_dashboard():
 
     col1, col2 = st.columns(2)
     with col1:
-        data_inicio = date_input_br(
-            "Data Início", value=date.today().replace(day=1), key="dash_data_inicio"
-        )
+        data_inicio = date_input_br("Data Início", value=date.today().replace(day=1), key="dash_data_inicio")
     with col2:
-        data_fim = date_input_br(
-            "Data Fim", value=date.today(), key="dash_data_fim"
-        )
+        data_fim = date_input_br("Data Fim", value=date.today(), key="dash_data_fim")
 
     resumo = relatorios.get_resumo_financeiro(
         st.session_state.user["id"], data_inicio, data_fim
@@ -176,8 +155,7 @@ def pagina_dashboard():
     with col2:
         st.metric("❤️ Total Débitos", f"R$ {resumo['total_debitos']:,.2f}")
     with col3:
-        emoji = "💰" if resumo["saldo"] >= 0 else "⚠️"
-        st.metric(f"{emoji} Saldo", f"R$ {resumo['saldo']:,.2f}")
+        st.metric("💰 Saldo", f"R$ {resumo['saldo']:,.2f}")
 
     st.divider()
 
@@ -194,12 +172,9 @@ def pagina_dashboard():
         df = pd.DataFrame(parcelas)
         df = df[df["status_id"].isin([1, 3])]
         if not df.empty:
-            df_display = df[
-                ["data_vencimento", "fornecedor_nome", "lancamento_descricao", "valor_parcela", "status_descricao"]
-            ].copy()
+            df_display = df[["data_vencimento", "fornecedor_nome", "lancamento_descricao", "valor_parcela", "status_descricao"]].copy()
             df_display.columns = ["Vencimento", "Fornecedor", "Descrição", "Valor", "Status"]
             df_display["Valor"] = df_display["Valor"].apply(lambda x: f"R$ {x:,.2f}")
-
             st.dataframe(df_display, use_container_width=True, hide_index=True)
         else:
             st.info("Nenhuma parcela em aberto nos próximos 30 dias.")
@@ -208,7 +183,7 @@ def pagina_dashboard():
 
 
 # -------------------------------------------------
-# 🏢 Fornecedores
+# Fornecedores
 # -------------------------------------------------
 def pagina_fornecedores():
     st.title("🏢 Gestão de Fornecedores")
@@ -241,11 +216,7 @@ def pagina_fornecedores():
         if st.button("Cadastrar Fornecedor", type="primary"):
             if nome:
                 success, forn_id, message = cadastros.criar_fornecedor(
-                    st.session_state.user["id"],
-                    nome,
-                    cpf_cnpj,
-                    telefone,
-                    email,
+                    st.session_state.user["id"], nome, cpf_cnpj, telefone, email
                 )
                 if success:
                     st.success(message)
@@ -254,7 +225,6 @@ def pagina_fornecedores():
                     st.error(message)
             else:
                 st.warning("O nome do fornecedor é obrigatório!")
-
 
 # -------------------------------------------------
 # 🏧 Meios de Pagamento (cartões / PIX)
@@ -293,6 +263,7 @@ def pagina_meios_pagamento():
                 classe = "" if ativo else "meio-inativo"
                 status_txt = "Ativo" if ativo else "Inativo"
                 linha = f"**{m.get('apelido', '')}**"
+
                 banco = m.get("banco")
                 bandeira = m.get("bandeira_cartao")
                 ult = m.get("ultimos_digitos")
@@ -313,23 +284,28 @@ def pagina_meios_pagamento():
                     if detalhes:
                         st.write(" • " + " | ".join(detalhes))
                     st.write(f"**Status:** {status_txt}")
+
                     if ativo:
                         if st.button("Desativar", key=f"desativar_meio_{m['id']}"):
-                            ok, msg = cadastros.desativar_meio_pagamento(m["id"], st.session_state.user["id"])
+                            ok, msg = cadastros.desativar_meio_pagamento(
+                                m["id"],
+                                st.session_state.user["id"]
+                            )
                             if ok:
                                 st.success(msg)
                                 st.rerun()
                             else:
                                 st.error(msg)
+
                     st.divider()
 
-            # Cartões de Crédito
+            # CARTÃO CRÉDITO
             if grupos["CARTAO_CREDITO"]:
                 st.subheader("💳 Cartões de Crédito")
                 for m in grupos["CARTAO_CREDITO"]:
                     render_meio(m)
 
-            # Cartões de Débito
+            # CARTÃO DÉBITO
             if grupos["CARTAO_DEBITO"]:
                 st.subheader("💳 Cartões de Débito")
                 for m in grupos["CARTAO_DEBITO"]:
@@ -341,7 +317,7 @@ def pagina_meios_pagamento():
                 for m in grupos["PIX"]:
                     render_meio(m)
 
-            # Outros
+            # OUTROS
             if grupos["OUTRO"]:
                 st.subheader("💼 Outros")
                 for m in grupos["OUTRO"]:
@@ -358,32 +334,28 @@ def pagina_meios_pagamento():
             "Outro": "OUTRO",
         }
 
-        tipo_label = st.selectbox(
-            "Tipo de Pagamento *",
-            list(tipo_map.keys()),
-            index=0
-        )
+        tipo_label = st.selectbox("Tipo de Pagamento *", list(tipo_map.keys()))
         tipo_pagamento = tipo_map[tipo_label]
 
         apelido = st.text_input(
             "Apelido *",
             help="Ex.: 'Santander – Master – 9999' ou 'Caixa – Principal'"
         )
-        banco = st.text_input("Banco (opcional)", help="Ex.: Santander, Nubank, Caixa...")
+        banco = st.text_input("Banco (opcional)", help="Ex.: Nubank, Santander...")
 
         bandeira_cartao = None
         ultimos_digitos = None
         chave_pix = None
 
         if tipo_pagamento in ("CARTAO_CREDITO", "CARTAO_DEBITO"):
-            bandeira_cartao = st.text_input("Bandeira do Cartão", help="Ex.: Visa, Master, Elo...")
+            bandeira_cartao = st.text_input("Bandeira do Cartão", help="Ex.: Visa, Master")
             ultimos_digitos = st.text_input("Últimos 4 dígitos", max_chars=4)
         elif tipo_pagamento == "PIX":
-            chave_pix = st.text_input("Chave PIX (opcional)", help="E-mail, CPF, telefone ou aleatória")
+            chave_pix = st.text_input("Chave PIX (opcional)")
 
         if st.button("Salvar Meio de Pagamento", type="primary"):
             if not apelido:
-                st.warning("Informe pelo menos o apelido.")
+                st.warning("Informe o apelido.")
             else:
                 ok, meio_id, msg = cadastros.criar_meio_pagamento(
                     usuario_id=st.session_state.user["id"],
@@ -402,27 +374,7 @@ def pagina_meios_pagamento():
 
 
 # -------------------------------------------------
-# Helper para mapear tipo_documento -> tipo_pagamento
-# -------------------------------------------------
-def inferir_tipo_pagamento_por_documento(descricao_tipo_doc: str):
-    """
-    Mapeia a descrição do tipo de documento para o tipo_pagamento
-    usado em meios_pagamento_usuario.
-    """
-    if not descricao_tipo_doc:
-        return None
-    desc = descricao_tipo_doc.upper()
-    if "CRÉDITO" in desc or "CREDITO" in desc:
-        return "CARTAO_CREDITO"
-    if "DÉBITO" in desc or "DEBITO" in desc:
-        return "CARTAO_DEBITO"
-    if "PIX" in desc:
-        return "PIX"
-    return None
-
-
-# -------------------------------------------------
-# 💳 Lançamento de Débito
+# 💳 Lançamento de Débito (AJUSTADO)
 # -------------------------------------------------
 def pagina_lancamento_debito():
     st.title("💳 Lançamento de Débito")
@@ -461,10 +413,17 @@ def pagina_lancamento_debito():
             format_func=lambda x: x["descricao"]
         )
 
-        # Descobre se esse tipo de documento usa cartão / pix
-        tipo_pagamento_para_meio = inferir_tipo_pagamento_por_documento(
-            tipo_documento["descricao"]
-        )
+        # Aponta tipo_pagamento para buscar o meio certo
+        desc = forma_pagamento["descricao"].upper()
+
+        if "CRÉDITO" in desc or "CREDITO" in desc:
+            tipo_pagamento_para_meio = "CARTAO_CREDITO"
+        elif "DÉBITO" in desc or "DEBITO" in desc:
+            tipo_pagamento_para_meio = "CARTAO_DEBITO"
+        elif "PIX" in desc:
+            tipo_pagamento_para_meio = "PIX"
+        else:
+            tipo_pagamento_para_meio = None
 
         if tipo_pagamento_para_meio:
             meios_disponiveis = cadastros.listar_meios_pagamento_usuario(
@@ -480,20 +439,40 @@ def pagina_lancamento_debito():
                     format_func=lambda x: x["apelido"],
                 )
             else:
-                st.warning(
-                    "Nenhum cartão/conta cadastrada para esse tipo de documento.\n"
-                    "Cadastre em: **Meios de Pagamento** no menu lateral."
-                )
+                st.warning("Nenhum cartão/conta cadastrado para esta forma de pagamento.")
 
     with col2:
         valor_total = st.number_input("Valor Total *", min_value=0.01, step=0.01, format="%.2f")
         descricao = st.text_input("Descrição *")
+
+        # ----------------------------------------------
+        # ❗ REGRAS DEFINITIVAS DE PARCELAMENTO
+        # ----------------------------------------------
+        forma_txt = forma_pagamento["descricao"].upper()
+
+        PODE_PARCELAR = (
+            "CRÉDITO" in forma_txt
+            or "CREDITO" in forma_txt
+            or "PIX" in forma_txt
+            or "BOLETO" in forma_txt
+        )
+
+        eh_debito = "DÉBITO" in forma_txt or "DEBITO" in forma_txt
+
         quantidade_parcelas = 1
 
-        if tipo_documento["permite_parcelamento"]:
+        if eh_debito:
+            st.caption("📌 Cartão de Débito não permite parcelamento (será 1 parcela).")
+        elif PODE_PARCELAR:
             quantidade_parcelas = st.number_input(
-                "Quantidade de Parcelas *", min_value=1, max_value=360, value=1
+                "Quantidade de Parcelas *",
+                min_value=1,
+                max_value=360,
+                value=1,
             )
+            st.caption("💡 Forma de pagamento permite parcelamento.")
+        else:
+            st.caption("📌 Esta forma de pagamento não permite parcelamento (será 1 parcela).")
 
         data_primeira = date_input_br(
             "Vencimento da 1ª Parcela",
@@ -505,14 +484,10 @@ def pagina_lancamento_debito():
 
     if st.button("Lançar Débito", type="primary"):
         if fornecedor and forma_pagamento and tipo_documento and valor_total > 0 and descricao:
-            # monta observação final com o meio selecionado (se houver)
             observacoes_final = observacoes or ""
             if meio_selecionado:
-                tag_meio = f"[Meio: {meio_selecionado['apelido']}]"
-                if observacoes_final:
-                    observacoes_final = observacoes_final.strip() + " " + tag_meio
-                else:
-                    observacoes_final = tag_meio
+                tag = f"[Meio: {meio_selecionado['apelido']}]"
+                observacoes_final = (observacoes_final + " " + tag).strip()
 
             success, lanc_id, message = debitos.criar_lancamento_debito(
                 usuario_id=st.session_state.user["id"],
@@ -521,15 +496,21 @@ def pagina_lancamento_debito():
                 tipo_documento_id=tipo_documento["id"],
                 valor_total=valor_total,
                 descricao=descricao,
-                quantidade_parcelas=quantidade_parcelas,
-                bandeira_cartao_id=None,  # mantido por compatibilidade; usando meios_pagamento_usuario em observação
+                quantidade_parcelas=int(quantidade_parcelas),
+                bandeira_cartao_id=None,
                 data_primeira_parcela=data_primeira,
                 observacoes=observacoes_final,
             )
 
             if success:
                 st.success(message)
-                st.info(f"Valor por parcela: R$ {valor_total/quantidade_parcelas:.2f}")
+
+                if quantidade_parcelas > 1:
+                    valor_parcela = valor_total / quantidade_parcelas
+                    st.info(f"📌 Parcelado em {quantidade_parcelas}x de R$ {valor_parcela:,.2f}")
+                else:
+                    st.info("📌 Lançado em parcela única.")
+
                 st.rerun()
             else:
                 st.error(message)
@@ -538,7 +519,7 @@ def pagina_lancamento_debito():
 
 
 # -------------------------------------------------
-# 💰 Lançamento de Crédito
+# Lançamento de Crédito
 # -------------------------------------------------
 def pagina_lancamento_credito():
     st.title("💰 Lançamento de Crédito")
@@ -575,18 +556,17 @@ def pagina_lancamento_credito():
                 data_recebimento=data_receb,
                 observacoes=observacoes,
             )
-
             if success:
                 st.success(message)
                 st.rerun()
             else:
                 st.error(message)
         else:
-            st.warning("Preencha todos os campos obrigatórios!")
+            st.warning("Preencha os campos obrigatórios!")
 
 
 # -------------------------------------------------
-# 📝 Gestão de Parcelas
+# Gestão de Parcelas
 # -------------------------------------------------
 def pagina_gestao_parcelas():
     st.title("📝 Gestão de Parcelas")
@@ -663,9 +643,7 @@ def pagina_gestao_parcelas():
 
             with col1:
                 st.write(f"**{p['fornecedor_nome']}**")
-                st.write(
-                    f"{p['lancamento_descricao']} - Parcela {p['numero_parcela']}/{p['quantidade_parcelas']}"
-                )
+                st.write(f"{p['lancamento_descricao']} - Parcela {p['numero_parcela']}/{p['quantidade_parcelas']}")
 
             with col2:
                 st.write(f"**Vencimento:** {p['data_vencimento']}")
@@ -680,10 +658,9 @@ def pagina_gestao_parcelas():
 
             with col4:
                 if p["status_id"] in (1, 3):
-                    if st.button("✅ Baixar", key=f"baixar_{p['id']}"):
+                    if st.button("Baixar", key=f"baixar_{p['id']}"):
                         success, message = debitos.baixar_parcela(
-                            p["id"],
-                            st.session_state.user["id"]
+                            p["id"], st.session_state.user["id"]
                         )
                         if success:
                             st.success(message)
@@ -694,18 +671,18 @@ def pagina_gestao_parcelas():
             st.divider()
 
     else:
-        st.info("Nenhuma parcela encontrada com os filtros selecionados.")
+        st.info("Nenhuma parcela encontrada.")
 
 
 # -------------------------------------------------
-# 📈 RELATÓRIOS
+# Relatórios
 # -------------------------------------------------
 def pagina_relatorios():
     st.title("📈 Relatórios Financeiros")
 
     tab1, tab2, tab3 = st.tabs(["Conta Corrente", "Mensal", "Por Fornecedor"])
 
-    # TAB 1 – Extrato Conta Corrente
+    # TAB 1 – Extrato
     with tab1:
         st.subheader("Extrato Tipo Conta Corrente")
 
@@ -723,7 +700,7 @@ def pagina_relatorios():
 
         fornecedores = cadastros.listar_fornecedores(st.session_state.user["id"])
         fornecedor = st.selectbox(
-            "Filtrar por Fornecedor (opcional)",
+            "Fornecedor (opcional)",
             options=[None] + fornecedores,
             format_func=lambda x: "Todos" if x is None else x["nome"],
             key="rel1_forn"
@@ -743,28 +720,11 @@ def pagina_relatorios():
                 df_display["debito"] = df_display["debito"].apply(lambda x: f"R$ {x:,.2f}" if x > 0 else "")
                 df_display["saldo"] = df_display["saldo"].apply(lambda x: f"R$ {x:,.2f}")
 
-                df_display = df_display[
-                    ["data", "tipo", "descricao", "fornecedor", "credito", "debito", "saldo"]
-                ]
-                df_display.columns = ["Data", "Tipo", "Descrição", "Fornecedor", "Crédito", "Débito", "Saldo"]
-
                 st.dataframe(df_display, use_container_width=True, hide_index=True)
-
-                total_credito = df["credito"].sum()
-                total_debito = df["debito"].sum()
-                saldo_final = df["saldo"].iloc[-1]
-
-                col1, col2, col3 = st.columns(3)
-                with col1:
-                    st.metric("💚 Total Créditos", f"R$ {total_credito:,.2f}")
-                with col2:
-                    st.metric("❤️ Total Débitos", f"R$ {total_debito:,.2f}")
-                with col3:
-                    st.metric("💰 Saldo Final", f"R$ {saldo_final:,.2f}")
             else:
-                st.info("Nenhuma movimentação encontrada no período.")
+                st.info("Sem dados no período.")
 
-    # TAB 2 – Relatório Mensal
+    # TAB 2 – Mensal
     with tab2:
         st.subheader("Relatório Mensal de Débitos")
 
@@ -776,30 +736,24 @@ def pagina_relatorios():
                 "Mês",
                 options=list(range(1, 13)),
                 format_func=lambda x: [
-                    "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
-                    "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"
+                    "Janeiro","Fevereiro","Março","Abril","Maio","Junho",
+                    "Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"
                 ][x - 1],
                 index=date.today().month - 1
             )
 
-        if st.button("Gerar Relatório", key="btn_rel2"):
+        if st.button("Gerar Relatório", key="btn_rel_mensal"):
             df = relatorios.gerar_relatorio_mensal_debitos(
                 st.session_state.user["id"], ano, mes
             )
 
             if not df.empty:
-                df_display = df.copy()
-                df_display["valor_parcela"] = df_display["valor_parcela"].apply(lambda x: f"R$ {x:,.2f}")
-                df_display["valor_pago"] = df_display["valor_pago"].apply(
-                    lambda x: f"R$ {x:,.2f}" if pd.notna(x) else ""
-                )
-
-                st.dataframe(df_display, use_container_width=True, hide_index=True)
-                st.metric("💰 Total do Mês", f"R$ {df['valor_parcela'].sum():,.2f}")
+                df["valor_parcela"] = df["valor_parcela"].apply(lambda x: f"R$ {x:,.2f}")
+                st.dataframe(df, use_container_width=True, hide_index=True)
             else:
-                st.info("Nenhum débito encontrado neste mês.")
+                st.info("Nenhum débito encontrado no mês.")
 
-    # TAB 3 – Relatório por Fornecedor
+    # TAB 3 – Por fornecedor
     with tab3:
         st.subheader("Relatório por Fornecedor")
 
@@ -807,7 +761,7 @@ def pagina_relatorios():
 
         if fornecedores:
             fornecedor = st.selectbox(
-                "Selecione o Fornecedor",
+                "Fornecedor",
                 options=fornecedores,
                 format_func=lambda x: x["nome"],
                 key="rel3_forn",
@@ -834,7 +788,7 @@ def pagina_relatorios():
                         key="rel3_fim"
                     )
 
-            if st.button("Gerar Relatório", key="btn_rel3"):
+            if st.button("Gerar", key="btn_rel3"):
                 relatorio = relatorios.gerar_relatorio_por_fornecedor(
                     st.session_state.user["id"],
                     fornecedor["id"],
@@ -844,60 +798,42 @@ def pagina_relatorios():
 
                 if relatorio:
                     st.write("### Informações do Fornecedor")
-
-                    col1, col2 = st.columns(2)
-                    with col1:
-                        st.write(f"**Nome:** {relatorio['fornecedor']['nome']}")
-                        st.write(f"**CPF/CNPJ:** {relatorio['fornecedor']['cpf_cnpj'] or 'Não informado'}")
-                    with col2:
-                        st.write(f"**Telefone:** {relatorio['fornecedor']['telefone'] or 'Não informado'}")
-                        st.write(f"**Email:** {relatorio['fornecedor']['email'] or 'Não informado'}")
+                    st.write(f"**Nome:** {relatorio['fornecedor']['nome']}")
+                    st.write(f"**CPF/CNPJ:** {relatorio['fornecedor']['cpf_cnpj'] or 'Não informado'}")
+                    st.write(f"**Telefone:** {relatorio['fornecedor']['telefone'] or 'Não informado'}")
+                    st.write(f"**Email:** {relatorio['fornecedor']['email'] or 'Não informado'}")
 
                     st.divider()
 
                     st.write("### Estatísticas")
                     col1, col2, col3, col4 = st.columns(4)
 
-                    with col1:
-                        st.metric("Total de Parcelas", relatorio["estatisticas"]["total_parcelas"])
-                    with col2:
-                        st.metric("Parcelas Pagas", relatorio["estatisticas"]["parcelas_pagas"])
-                    with col3:
-                        st.metric("Parcelas em Aberto", relatorio["estatisticas"]["parcelas_abertas"])
-                    with col4:
-                        st.metric("Parcelas Vencidas", relatorio["estatisticas"]["parcelas_vencidas"])
-
-                    col1, col2 = st.columns(2)
-                    with col1:
-                        st.metric("💚 Valor Pago", f"R$ {relatorio['estatisticas']['valor_pago']:,.2f}")
-                    with col2:
-                        st.metric("⚠️ Valor em Aberto", f"R$ {relatorio['estatisticas']['valor_em_aberto']:,.2f}")
+                    est = relatorio["estatisticas"]
+                    col1.metric("Total de Parcelas", est["total_parcelas"])
+                    col2.metric("Pagas", est["parcelas_pagas"])
+                    col3.metric("Abertas", est["parcelas_abertas"])
+                    col4.metric("Vencidas", est["parcelas_vencidas"])
 
                     st.divider()
 
                     if not relatorio["parcelas"].empty:
-                        st.write("### Parcelas")
-                        df_display = relatorio["parcelas"].copy()
-                        df_display["valor_parcela"] = df_display["valor_parcela"].apply(lambda x: f"R$ {x:,.2f}")
-                        df_display["valor_pago"] = df_display["valor_pago"].apply(
-                            lambda x: f"R$ {x:,.2f}" if pd.notna(x) else ""
-                        )
-
-                        st.dataframe(df_display, use_container_width=True, hide_index=True)
+                        df = relatorio["parcelas"].copy()
+                        df["valor_parcela"] = df["valor_parcela"].apply(lambda x: f"R$ {x:,.2f}")
+                        st.dataframe(df, use_container_width=True, hide_index=True)
                 else:
                     st.error("Fornecedor não encontrado.")
         else:
-            st.info("Nenhum fornecedor cadastrado ainda.")
+            st.info("Nenhum fornecedor cadastrado.")
 
 
 # -------------------------------------------------
-# 🚀 MAIN
+# MAIN
 # -------------------------------------------------
 def main():
     if not st.session_state.logged_in:
         login_page()
     else:
-        # SIDEBAR
+        # Sidebar
         with st.sidebar:
             st.title("💰 Controle Financeiro")
             st.write(f"**Usuário:** {st.session_state.user['nome_completo']}")
@@ -916,12 +852,12 @@ def main():
                 ],
                 key="menu_option",
             )
-            st.divider()
 
-            if st.button("🚪 Sair", use_container_width=True):
+            st.divider()
+            if st.button("Sair", use_container_width=True):
                 logout()
 
-        # MAIN CONTENT
+        # conteúdo principal
         if menu_option == "Dashboard":
             pagina_dashboard()
         elif menu_option == "Fornecedores":
