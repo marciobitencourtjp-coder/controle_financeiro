@@ -13,10 +13,6 @@ import debitos
 import creditos
 import relatorios
 
-# -------------------------------------------------
-# 🚫 REMOVIDO — NÃO MOSTRAR CONFIG DO POSTGRES
-# st.sidebar.write("POSTGRES CONFIG:", POSTGRES_CONFIG)
-# -------------------------------------------------
 
 # -------------------------------------------------
 # 🚩 Helpers para datas no padrão brasileiro
@@ -39,13 +35,14 @@ def date_input_br(label: str, value: date, key: str) -> date:
 
 
 # -------------------------------------------------
-# ⚙️ Configuração da página
+# ⚙️ Configuração da página (tema claro)
 # -------------------------------------------------
 st.set_page_config(
     page_title="Controle Financeiro",
     page_icon="💰",
     layout="wide",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="expanded",
+    # theme="light"  # <<< Tema claro ativado
 )
 
 # Inicializa banco
@@ -57,19 +54,29 @@ if "logged_in" not in st.session_state:
 if "user" not in st.session_state:
     st.session_state.user = None
 
-# CSS customizado
+
+# -------------------------------------------------
+# 🎨 CSS customizado (tema claro)
+# -------------------------------------------------
 st.markdown(
     """
 <style>
+    body {
+        background-color: #ffffff !important;
+        color: #000000 !important;
+    }
+    .stApp {
+        background-color: #ffffff !important;
+    }
     .stMetric {
-        background-color: #f0f2f6;
+        background-color: #f0f2f6 !important;
         padding: 10px;
         border-radius: 5px;
     }
-    .credito { color: #28A745; font-weight: bold; }
-    .debito { color: #DC3545; font-weight: bold; }
-    .saldo-positivo { color: #28A745; font-weight: bold; }
-    .saldo-negativo { color: #DC3545; font-weight: bold; }
+    .credito { color: #28A745 !important; font-weight: bold; }
+    .debito { color: #DC3545 !important; font-weight: bold; }
+    .saldo-positivo { color: #28A745 !important; font-weight: bold; }
+    .saldo-negativo { color: #DC3545 !important; font-weight: bold; }
 </style>
 """,
     unsafe_allow_html=True,
